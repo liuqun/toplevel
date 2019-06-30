@@ -20,3 +20,12 @@ Modified from:
     ./a.out
 
 Or `make && ./udp_daytime_server`
+
+### Execute command ncat as an UDP client
+`nc` or `ncat` can be used as an UDP client to talk with the UDP daytime server through UDP port 8013.
+Example:
+```
+[liuqun@localhost ASIO-UDP-test]$ nc -u 127.0.0.1 8013
+send anything here...
+Sun Jun 30 17:57:14 2019
+```
