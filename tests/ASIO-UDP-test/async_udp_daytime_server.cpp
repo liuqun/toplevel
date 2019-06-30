@@ -22,6 +22,13 @@
 
 using asio::ip::udp;
 
+#include <asio/version.hpp>
+#if defined(ASIO_VERSION) && ASIO_VERSION <= 101008
+namespace asio {
+    class io_context : public asio::io_service {};
+};
+#endif
+
 std::string make_daytime_string()
 {
     using namespace std;
