@@ -15,6 +15,7 @@
 #include <asio.hpp>
 
 using asio::ip::udp;
+using std::fprintf;
 
 #include <asio/version.hpp>
 #if defined(ASIO_VERSION) && ASIO_VERSION <= 101008
@@ -52,7 +53,7 @@ int main()
             socket.send_to(asio::buffer(message), remote_endpoint, 0, ignored_error);
         }
     } catch (std::system_error& e) {
-        std::fprintf(stderr, "%s\n", e.what());
+        fprintf(stderr, "%s\n", e.what());
     }
 
     return 0;
