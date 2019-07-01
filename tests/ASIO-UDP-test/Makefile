@@ -1,5 +1,6 @@
 programs += udp_daytime_server
 programs += async_udp_daytime_server
+programs += udp_echo_server
 
 CC = gcc
 CXX = g++
