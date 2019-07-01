@@ -4,17 +4,22 @@
 // https://think-async.com/Asio/asio-1.13.0/doc/asio/tutorial/tutdaytime5/src.html
 //
 // How to compile:
-//     g++ -g -O0 -pthread -std=c++11 -c udp_daytime_server.cpp -lpthread
+//     sudo apt install g++-9
+//     g++-9 -g -O0 -pthread -std=c++2a -c udp_daytime_server.cpp -lpthread
 // Run:
 //     ./a.out
 
 #include <ctime>
 #include <cstdio>
 #include <string>
-#include <boost/array.hpp>
-#include <asio.hpp>
-
-using asio::ip::udp;
+#include <array>
+using std::array;
+#include <system_error>
+using std::error_code;
+#include <experimental/net>
+//#include <experimental/socket>
+using namespace std::experimental::net::v1;
+//using std::experimentall::net::error_code;
 
 #include <asio/version.hpp>
 #if defined(ASIO_VERSION) && ASIO_VERSION <= 101008
@@ -33,23 +38,27 @@ std::string make_daytime_string()
 
 int main()
 {
-    const int DEFAULT_PORT = 8013; // port 13 requires root access, use 8013 instead...
+    const int DEFAULT_PORT = 13; // port 13 requires root access, use 8013 instead...
 
     try {
-        asio::io_context io_context;
+        io_context io_context;
 
-        udp::socket socket(io_context, udp::endpoint(udp::v4(), DEFAULT_PORT));
+	ip::udp::socket socket(io_context, ip::udp::endpoint(ip::udp::v4(), DEFAULT_PORT));
+	fprintf(stderr, "aaa\n");
 
         for (;;) {
-            boost::array<char, 1> recv_buf;
-            udp::endpoint remote_endpoint;
-            asio::error_code error;
-            socket.receive_from(asio::buffer(recv_buf), remote_endpoint);
+            array<char, 1> recv_buf;
+	    ip::udp::endpoint remote_endpoint;
+	    error_code error;
+	fprintf(stderr, "bbb\n");
+            socket.receive_from(_BufferSequence(recv_buf), remote_endpoint);
+	fprintf(stderr, "cc\n");
 
             std::string message = make_daytime_string();
 
-            asio::error_code ignored_error;
-            socket.send_to(asio::buffer(message), remote_endpoint, 0, ignored_error);
+            error_code ignored_error;
+            socket.send_to(_ConstBufferSequence(message), remote_endpoint, 0, ignored_error);
+	fprintf(stderr, "ddd\n");
         }
     } catch (std::system_error& e) {
         std::fprintf(stderr, "%s\n", e.what());
