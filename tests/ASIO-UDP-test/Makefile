@@ -10,7 +10,7 @@ CXXFLAGS = $(CFLAGS) -std=c++11
 CPPFLAGS = -DNDEBUG
 LIBS = -lpthread -lgcc_s
 OPENSSL_CFLAGS = -I/opt/openssl/include
-OPENSSL_LIBS = /opt/openssl/lib/libssl.a /opt/openssl/lib/libcrypto.a
+OPENSSL_LIBS = /opt/openssl/lib/libssl.a /opt/openssl/lib/libcrypto.a -ldl
 
 RM = rm -rf
 
