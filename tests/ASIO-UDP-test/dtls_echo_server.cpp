@@ -89,6 +89,25 @@ extern "C" {
     static int server_app_generate_cookie(SSL *ssl, unsigned char *cookie, unsigned int *cookie_len);
     static int server_app_verify_cookie(SSL *ssl, const unsigned char *cookie, unsigned int cookie_len);
     static char char_from_int(int byte);
+
+    /* BIO_s_custom 定义 */
+    typedef struct custom_bio_data_st {
+        // buffer_t txaddr_buf;
+        // union {
+        //     struct sockaddr_storage txaddr_storage;
+        //     struct sockaddr         txaddr;
+        //     struct sockaddr_in      txaddr_v4;
+        //     struct sockaddr_in6     txaddr_v6;
+        // };
+        // deque_t rxqueue;
+        // int txfd;
+        int peekmode;
+    } custom_bio_data_t;
+
+    /* BIO子函数声明 */
+    const BIO_METHOD *BIO_s_custom(void);
+    void BIO_s_custom_meth_init(void);
+    void BIO_s_custom_meth_deinit(void);
 }; // end of extern "C"
 
 
@@ -284,6 +303,8 @@ fprintf(stderr, "DEBUG: LINE=%d,  ciphertext_len = %d\n", __LINE__, ciphertext_l
             }
         }
     }
+
+    BIO_s_custom_meth_deinit();
     return 0;
 }
 
@@ -435,3 +456,230 @@ int server_app_verify_cookie(SSL *ssl, const unsigned char *cookie, unsigned int
 //     *cookie_len = result_len;
 //     return 1;
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+static
+int BIO_s_custom_write_ex(BIO *b, const char *data, size_t dlen, size_t *written)
+{
+    //fprintf(stderr, "BIO_s_custom_write_ex(BIO[0x%016lX], data[0x%016lX], dlen[%ld], *written[%ld])\n", b, data, dlen, *written);
+    fflush(stderr);
+
+    return -1;
+}
+
+static
+int BIO_s_custom_write(BIO *b, const char *data, int dlen)
+{
+    return 1;
+    // int ret;
+    // custom_bio_data_t *cdp;
+    //
+    // ret = -1;
+    // fprintf(stderr, "BIO_s_custom_write(BIO[0x%016lX], buf[0x%016lX], dlen[%ld])\n", b, data, dlen);
+    // fflush(stderr);
+    // cdp = (custom_bio_data_t *)BIO_get_data(b);
+    //
+    // dump_addr((struct sockaddr *)&cdp->txaddr, ">> ");
+    // BIO_dump_hex((unsigned const char *)data, dlen, "    ");
+    // ret = sendto(cdp->txfd, data, dlen, 0, (struct sockaddr *)&cdp->txaddr, cdp->txaddr_buf.len);
+    // if (ret >= 0)
+    //     fprintf(stderr, "  %d bytes sent\n", ret);
+    // else
+    //     fprintf(stderr, "  ret: %d errno: [%d] %s\n", ret, errno, strerror(errno));
+    //
+    // return ret;
+}
+
+static
+int BIO_s_custom_read_ex(BIO *b, char *data, size_t dlen, size_t *readbytes)
+{
+    //fprintf(stderr, "BIO_s_custom_read_ex(BIO[0x%016lX], data[0x%016lX], dlen[%ld], *readbytes[%ld])\n", b, data, dlen, *readbytes);
+    //fflush(stderr);
+
+    return -1;
+}
+
+static
+int BIO_s_custom_read(BIO *b, char *data, int dlen)
+{
+    return 1;
+    // int ret;
+    // custom_bio_data_t *cdp;
+    // deque_t *dp;
+    // buffer_t *bp;
+
+    // ret = -1;
+    // fprintf(stderr, "BIO_s_custom_read(BIO[0x%016lX], data[0x%016lX], dlen[%ld])\n", b, data, dlen);
+    // fprintf(stderr, "  probe peekmode %d\n",
+    //         ((custom_bio_data_t *)BIO_get_data(b))->peekmode);
+    // fflush(stderr);
+
+    // cdp = (custom_bio_data_t *)BIO_get_data(b);
+    // dp = &cdp->rxqueue;
+    // fprintf(stderr, "  data[0x%016lX] queue: %d\n", dp, deque_count(dp));
+    // if (dp->head)
+    // {
+    //     if (((custom_bio_data_t *)BIO_get_data(b))->peekmode)
+    //         bp = (buffer_t *)deque_peekleft(dp);
+    //     else
+    //         bp = (buffer_t *)deque_popleft(dp);
+    //     fprintf(stderr, "  buf[0x%016lX]\n", bp);
+    //     fflush(stderr);
+
+    //     ret = (bp->len<=dlen) ? bp->len : dlen;
+    //     memmove(data, bp->buf, ret);
+
+    //     if (!((custom_bio_data_t *)BIO_get_data(b))->peekmode)
+    //         buffer_free(bp);
+    // }
+
+    // return ret;
+}
+
+//int BIO_s_custom_gets(BIO *b, char *data, int size);
+
+//int BIO_s_custom_puts(BIO *b, const char *data);
+
+#if defined(OPENSSL_NO_SCTP)
+/* I would like the following definitions to be available even when SCTP feature was disabled in OpenSSL */
+#define BIO_CTRL_DGRAM_SCTP_ADD_AUTH_KEY 51
+#define BIO_CTRL_DGRAM_SCTP_NEXT_AUTH_KEY 52
+#define BIO_CTRL_DGRAM_SCTP_AUTH_CCS_RCVD 53
+#define BIO_CTRL_DGRAM_SCTP_GET_SNDINFO 60
+#define BIO_CTRL_DGRAM_SCTP_SET_SNDINFO 61
+#define BIO_CTRL_DGRAM_SCTP_GET_RCVINFO 62
+#define BIO_CTRL_DGRAM_SCTP_SET_RCVINFO 63
+#define BIO_CTRL_DGRAM_SCTP_GET_PRINFO 64
+#define BIO_CTRL_DGRAM_SCTP_SET_PRINFO 65
+#define BIO_CTRL_DGRAM_SCTP_SAVE_SHUTDOWN 70
+#endif /* end SCTP stuff */
+
+static
+long BIO_s_custom_ctrl(BIO *b, int cmd, long larg, void *pargs)
+{
+    long ret = 0;
+
+    /* DEBUG */
+    // fprintf(stderr, "BIO_s_custom_ctrl(BIO[0x%016lX], cmd[%d], larg[%ld], pargs[0x%016lX])\n", b, cmd, larg, pargs);
+    fflush(stderr);
+
+    switch(cmd)
+    {
+        case BIO_CTRL_FLUSH: // 11
+        case BIO_CTRL_DGRAM_SET_CONNECTED: // 32
+        case BIO_CTRL_DGRAM_SET_PEER: // 44
+        case BIO_CTRL_DGRAM_GET_PEER: // 46
+            ret = 1;
+            break;
+        case BIO_CTRL_WPENDING: // 13
+            ret = 0;
+            break;
+        case BIO_CTRL_DGRAM_QUERY_MTU: // 40
+        case BIO_CTRL_DGRAM_GET_FALLBACK_MTU: // 47
+            ret = 1500;
+            break;
+        case BIO_CTRL_DGRAM_GET_MTU_OVERHEAD: // 49
+            ret = 96; // random guess
+            break;
+        case BIO_CTRL_DGRAM_SET_PEEK_MODE: // 71
+            ((custom_bio_data_t *)BIO_get_data(b))->peekmode = !!larg;
+            ret = 1;
+            break;
+        case BIO_CTRL_PUSH: // 6
+        case BIO_CTRL_POP: // 7
+        case BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT: // 45
+            ret = 0;
+            break;
+        /* We need to handle/ignore the following SCTP control commands: */
+        case BIO_CTRL_DGRAM_SCTP_ADD_AUTH_KEY:
+        case BIO_CTRL_DGRAM_SCTP_NEXT_AUTH_KEY:
+        case BIO_CTRL_DGRAM_SCTP_AUTH_CCS_RCVD:
+        case BIO_CTRL_DGRAM_SCTP_GET_SNDINFO:
+        case BIO_CTRL_DGRAM_SCTP_SET_SNDINFO:
+        case BIO_CTRL_DGRAM_SCTP_GET_RCVINFO:
+        case BIO_CTRL_DGRAM_SCTP_SET_RCVINFO:
+        case BIO_CTRL_DGRAM_SCTP_GET_PRINFO:
+        case BIO_CTRL_DGRAM_SCTP_SET_PRINFO:
+        case BIO_CTRL_DGRAM_SCTP_SAVE_SHUTDOWN:
+            ret = 0;
+            break;
+        default:
+            /* DEBUG */
+            fprintf(stderr, "BIO_s_custom_ctrl(BIO[0x%p], cmd[%d], larg[%ld], pargs[0x%p])\n", b, cmd, larg, pargs);
+            fprintf(stderr, "ERROR: unknown cmd=%d\n", cmd);
+            ret = 0;
+            raise(SIGTRAP);
+            break;
+    }
+
+    return ret;
+}
+
+static
+int BIO_s_custom_create(BIO *b)
+{
+    //fprintf(stderr, "BIO_s_custom_create(BIO[0x%016lX])\n", b);
+    //fflush(stderr);
+
+    return 1;
+}
+
+static
+int BIO_s_custom_destroy(BIO *b)
+{
+    //fprintf(stderr, "BIO_s_custom_destroy(BIO[0x%016lX])\n", b);
+    //fflush(stderr);
+
+    return 1;
+}
+
+// long BIO_s_custom_callback_ctrl(BIO *, int, BIO_info_cb *);
+
+static BIO_METHOD *_BIO_s_custom = NULL;
+
+const BIO_METHOD *BIO_s_custom(void)
+{
+    if (_BIO_s_custom)
+    {
+        return _BIO_s_custom;
+    }
+    BIO_s_custom_meth_init();
+    return _BIO_s_custom;
+}
+
+void BIO_s_custom_meth_init(void)
+{
+    if (_BIO_s_custom)
+    {
+        return;
+    }
+
+    _BIO_s_custom = BIO_meth_new(BIO_get_new_index()|BIO_TYPE_SOURCE_SINK, "BIO_s_custom");
+
+    BIO_meth_set_write(_BIO_s_custom, BIO_s_custom_write);
+    BIO_meth_set_read(_BIO_s_custom, BIO_s_custom_read);
+    BIO_meth_set_ctrl(_BIO_s_custom, BIO_s_custom_ctrl);
+    BIO_meth_set_create(_BIO_s_custom, BIO_s_custom_create);
+    BIO_meth_set_destroy(_BIO_s_custom, BIO_s_custom_destroy);
+}
+
+void BIO_s_custom_meth_deinit(void)
+{
+    if (_BIO_s_custom)
+    {
+        BIO_meth_free(_BIO_s_custom);
+    }
+    _BIO_s_custom = NULL;
+}
