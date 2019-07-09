@@ -24,6 +24,26 @@ const int DEFAULT_PORT = 8007; // default Unix echo service port 7 requires root
 //using std::unordered_map;
 
 #include <openssl/ssl.h>
+extern "C" {
+    /* BIO_s_custom 定义 */
+    typedef struct custom_bio_data_st {
+        // buffer_t txaddr_buf;
+        // union {
+        //     struct sockaddr_storage txaddr_storage;
+        //     struct sockaddr         txaddr;
+        //     struct sockaddr_in      txaddr_v4;
+        //     struct sockaddr_in6     txaddr_v6;
+        // };
+        // deque_t rxqueue;
+        // int txfd;
+        int peekmode;
+    } custom_bio_data_t;
+
+    /* BIO子函数声明 */
+    const BIO_METHOD *BIO_s_custom(void);
+    void BIO_s_custom_meth_init(void);
+    void BIO_s_custom_meth_deinit(void);
+}; // end of extern "C"
 
 
 
@@ -35,9 +55,11 @@ public:
     {
         m_ssl = nullptr;
         m_incoming_bio = m_outgoing_bio = nullptr;
+        m_biodata.peekmode = 0;
     }
 
 public:
+    custom_bio_data_t m_biodata;
     SSL *m_ssl;
     BIO *m_incoming_bio; // incoming DTLS ciphertext data will be cached in this BIO
     BIO *m_outgoing_bio; // outgoing DTLS ciphertext data will be cached in this BIO
@@ -89,25 +111,6 @@ extern "C" {
     static int server_app_generate_cookie(SSL *ssl, unsigned char *cookie, unsigned int *cookie_len);
     static int server_app_verify_cookie(SSL *ssl, const unsigned char *cookie, unsigned int cookie_len);
     static char char_from_int(int byte);
-
-    /* BIO_s_custom 定义 */
-    typedef struct custom_bio_data_st {
-        // buffer_t txaddr_buf;
-        // union {
-        //     struct sockaddr_storage txaddr_storage;
-        //     struct sockaddr         txaddr;
-        //     struct sockaddr_in      txaddr_v4;
-        //     struct sockaddr_in6     txaddr_v6;
-        // };
-        // deque_t rxqueue;
-        // int txfd;
-        int peekmode;
-    } custom_bio_data_t;
-
-    /* BIO子函数声明 */
-    const BIO_METHOD *BIO_s_custom(void);
-    void BIO_s_custom_meth_init(void);
-    void BIO_s_custom_meth_deinit(void);
 }; // end of extern "C"
 
 
