@@ -37,6 +37,8 @@ extern "C" {
         // deque_t rxqueue;
         // int txfd;
         int peekmode;
+        udp::socket *udpsock_ptr;
+        udp::endpoint client_ip_and_port;
     } custom_bio_data_t;
 
     /* BIO子函数声明 */
@@ -51,11 +53,12 @@ extern "C" {
 /* 客户端访问会话记录 */
 class PeerRecord {
 public:
-    PeerRecord()//PeerRecord(const udp::endpoint& peer_ip_and_port): m_peer_ip_and_port(peer_ip_and_port)
+    PeerRecord(udp::socket *udpsock_ptr)
     {
         m_ssl = nullptr;
         m_incoming_bio = m_outgoing_bio = nullptr;
         m_biodata.peekmode = 0;
+        m_biodata.udpsock_ptr = udpsock_ptr;
     }
 
 public:
@@ -63,7 +66,6 @@ public:
     SSL *m_ssl;
     BIO *m_incoming_bio; // incoming DTLS ciphertext data will be cached in this BIO
     BIO *m_outgoing_bio; // outgoing DTLS ciphertext data will be cached in this BIO
-    //注: udp::endpoint m_peer_ip_and_port;
 };
 
 /* 【哈希函数的两种写法如下】 */
@@ -144,10 +146,12 @@ int main()
         return 0;
     }
 
-    PeerRecord record;
+    PeerRecord record(&socket);
     record.m_ssl = nullptr;
     record.m_incoming_bio = nullptr;
     record.m_outgoing_bio = nullptr;
+    record.m_biodata.peekmode = 0;
+    //record.m_biodata.udpsock_ptr = &socket;
     for (;;) {
         fprintf(stderr, "DEBUG: Now we have %d DTLS clients to talk with.\n", (int)connected_peers.size());
 
@@ -174,9 +178,12 @@ int main()
             ctx = server_app_conf.ctx;
             ssl = SSL_new(ctx);
             incoming_bio = BIO_new(BIO_s_mem());
-            outgoing_bio = BIO_new(BIO_s_mem());
             BIO_set_mem_eof_return(incoming_bio, -1);
-            BIO_set_mem_eof_return(outgoing_bio, -1);
+
+            outgoing_bio = BIO_new(BIO_s_custom());
+            BIO_set_data(outgoing_bio, &record.m_biodata);
+            BIO_set_init(outgoing_bio, 1);
+
             SSL_set0_rbio(ssl, incoming_bio);
             SSL_set0_wbio(ssl, outgoing_bio);
             SSL_set_accept_state(ssl);
@@ -186,6 +193,9 @@ int main()
             record.m_ssl = ssl;
             record.m_incoming_bio = incoming_bio;
             record.m_outgoing_bio = outgoing_bio;
+            record.m_biodata.peekmode = 0;
+            record.m_biodata.udpsock_ptr = &socket;
+            //record.m_biodata.udpsock_ptr = &socket;
 
             /* 以客户端IP地址端口号为key, 插入一条新的 PeerRecord 访问记录到connected_peers, 记录来自此 UDP 端口的客户端 */
             auto pair = connected_peers.insert(std::pair<udp::endpoint, PeerRecord> {client_ip_and_port, record});
@@ -195,6 +205,8 @@ int main()
             record.m_ssl = nullptr;
             record.m_incoming_bio = nullptr;
             record.m_outgoing_bio = nullptr;
+            record.m_biodata.peekmode = 0;
+            record.m_biodata.udpsock_ptr = &socket;
         }
 
         BIO_write(p->m_incoming_bio, incoming_data, n);
@@ -202,7 +214,7 @@ int main()
 
         if ( SSL_get_state(p->m_ssl) != TLS_ST_OK ) {
             /* 若此时客户端尚未完成 DTLS 握手, 则先收发握手包: */
-            int check = SSL_do_handshake(p->m_ssl);
+            int check = SSL_accept(p->m_ssl);
 fprintf(stderr, "DEBUG: LINE=%d,  check = %d\n", __LINE__, check);
             if (1 != check) {
 
@@ -211,22 +223,7 @@ fprintf(stderr, "DEBUG: LINE=%d,  check = %d\n", __LINE__, check);
                 fprintf(stderr, "DEBUG: LINE=%d, handshake finished.\n", __LINE__);
             }
 
-                char handshake_packet_cache[3000];
-                const int max_cache_bytes = sizeof(handshake_packet_cache);
-                int outgoing_len;
-
-                outgoing_len = BIO_ctrl_pending(p->m_outgoing_bio);
-fprintf(stderr, "DEBUG: LINE=%d,  outgoing_len = %d\n", __LINE__, outgoing_len);
-                if (outgoing_len <= 0) {
-                    continue;
-                }
-                if (outgoing_len > max_cache_bytes) {
-                    outgoing_len = max_cache_bytes;
-                }
-                BIO_read(p->m_outgoing_bio, handshake_packet_cache, outgoing_len);
-                socket.send_to(asio::buffer(handshake_packet_cache, outgoing_len), client_ip_and_port, 0, err_code_send);
-
-                continue;
+            continue;
         }
 
         char plaintext[1500];
@@ -247,13 +244,6 @@ fprintf(stderr, "DEBUG: LINE=%d,  outgoing_len = %d\n", __LINE__, outgoing_len);
                 if (1 == shutdown_status)
                 {
                     fprintf(stderr, "DEBUG: SSL_shutdown() success.\n");
-                    char outgoing_packet[1500];
-                    const int max_packet_bytes = sizeof(outgoing_packet);
-                    int packet_len = BIO_read(p->m_outgoing_bio, outgoing_packet, max_packet_bytes);
-                    if (packet_len <= 0) {
-                        continue;
-                    }
-                    socket.send_to(asio::buffer(outgoing_packet, packet_len), client_ip_and_port, 0, err_code_send);
                 }
                 else
                 {
@@ -283,27 +273,9 @@ fprintf(stderr, "DEBUG: LINE=%d\n", __LINE__);
             }
             fprintf(stdout, "}\n");
         }
-        if (plaintext_len > 0 && SSL_write(p->m_ssl, plaintext, plaintext_len) > 0){
-            char ciphertext[2000];
-            const int max_ciphertext_bytes = sizeof(ciphertext);
-            int ciphertext_len;
-            ciphertext_len = BIO_ctrl_pending(p->m_outgoing_bio);
-fprintf(stderr, "DEBUG: LINE=%d,  ciphertext_len = %d\n", __LINE__, ciphertext_len);
-            if (ciphertext_len <= 0) {
-                /* in theory an ok thing */
-                continue;
-            }
-            if (ciphertext_len > max_ciphertext_bytes) {
-                ciphertext_len = max_ciphertext_bytes;
-            }
-            ciphertext_len = BIO_read(p->m_outgoing_bio, ciphertext, ciphertext_len);
-            socket.send_to(asio::buffer(ciphertext, ciphertext_len), client_ip_and_port, 0, err_code_send);
-
-            int tmp;
-            if ((tmp = BIO_ctrl_pending(p->m_outgoing_bio))>0) {
-                fprintf(stderr, "DEBUG: LINE=%d, tmp = %d\n", __LINE__, tmp);
-
-            }
+        if (plaintext_len > 0){
+            int written = SSL_write(p->m_ssl, plaintext, plaintext_len);
+            fprintf(stderr, "DEBUG: LINE=%d, after SSL_write(), written=%d \n", __LINE__, written);
         }
     }
 
@@ -485,24 +457,33 @@ int BIO_s_custom_write_ex(BIO *b, const char *data, size_t dlen, size_t *written
 static
 int BIO_s_custom_write(BIO *b, const char *data, int dlen)
 {
-    return 1;
-    // int ret;
-    // custom_bio_data_t *cdp;
+    int ret = -1;
+    custom_bio_data_t *cdp;
     //
-    // ret = -1;
     // fprintf(stderr, "BIO_s_custom_write(BIO[0x%016lX], buf[0x%016lX], dlen[%ld])\n", b, data, dlen);
     // fflush(stderr);
-    // cdp = (custom_bio_data_t *)BIO_get_data(b);
+    cdp = (custom_bio_data_t *)BIO_get_data(b);
     //
     // dump_addr((struct sockaddr *)&cdp->txaddr, ">> ");
     // BIO_dump_hex((unsigned const char *)data, dlen, "    ");
-    // ret = sendto(cdp->txfd, data, dlen, 0, (struct sockaddr *)&cdp->txaddr, cdp->txaddr_buf.len);
+    udp::endpoint &client_ip_and_port = cdp->client_ip_and_port;
+    udp::socket &udpsock = *(cdp->udpsock_ptr);
+    std::error_code err_code_send;
+
+    fprintf(stderr, "DEBUG: LINE=%d: BIO_s_custom_write(b, data, dlen=%d)\n", __LINE__, dlen);
+
+const char *ip = client_ip_and_port.address().to_string().c_str();
+const int port = client_ip_and_port.port();
+fprintf(stderr, "DEBUG--!!!!!!! 准备发包给 client IP=%s, port=%d\n", ip, port);
+
+    udpsock.send_to(asio::buffer("a", 1), client_ip_and_port, 0, err_code_send);
+    //udpsock.send_to(asio::buffer(data, dlen), client_ip_and_port, 0, err_code_send); //sendto(cdp->txfd, data, dlen, 0, (struct sockaddr *)&cdp->txaddr, cdp->txaddr_buf.len);
     // if (ret >= 0)
     //     fprintf(stderr, "  %d bytes sent\n", ret);
     // else
     //     fprintf(stderr, "  ret: %d errno: [%d] %s\n", ret, errno, strerror(errno));
     //
-    // return ret;
+    return dlen;
 }
 
 static
@@ -658,12 +639,14 @@ const BIO_METHOD *BIO_s_custom(void)
     {
         return _BIO_s_custom;
     }
+    fprintf(stderr, "DEBUG!!!!!!!!!!!!!! 初始化 BIO_s_custom()\n");
     BIO_s_custom_meth_init();
     return _BIO_s_custom;
 }
 
 void BIO_s_custom_meth_init(void)
 {
+    fprintf(stderr, "DEBUG!!!!!!!!!!!!!! 初始化 BIO_s_custom_meth_init()\n");
     if (_BIO_s_custom)
     {
         return;
