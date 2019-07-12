@@ -90,19 +90,22 @@ private:
 
 const int DEFAULT_DAYTIME_SERVICE_PORT = 13;
 
+#define UDP_ONLY_IPV4 (udp::v4())
+#define UDP_BOTH_IPV4V6 (udp::v6())
+
 
 int main(void)
 {
     int port;
     int retry;
     asio::io_context io_context;
-    udp::socket sock(io_context, udp::v4());
+    udp::socket sock(io_context, UDP_BOTH_IPV4V6);
 
     port = DEFAULT_DAYTIME_SERVICE_PORT;
     for (retry=2; retry>0; retry-=1) {
         fprintf(stdout, "Preparing to run daytime server on UDP service port %d... \n", port);
         try {
-            sock.bind(udp::endpoint(udp::v4(), port));
+            sock.bind(udp::endpoint(UDP_BOTH_IPV4V6, port));
         } catch (std::system_error& e) {
             fprintf(stderr, "Warning: Failed to start server on UDP port %d: %s\n", port, e.what());
             port += 8000;
