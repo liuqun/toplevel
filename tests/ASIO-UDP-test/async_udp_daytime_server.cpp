@@ -30,7 +30,7 @@ namespace asio {
 }
 #endif
 
-std::string make_daytime_string()
+const std::string make_daytime_string()
 {
     using namespace std;
     // For time_t, time and ctime;
@@ -42,49 +42,54 @@ class udp_server {
 public:
     udp_server(udp::socket& sock) : sock_(sock)
     {
-        async_wait_for_next_incoming_packet();
+        async_receive_next_incoming_packet(incoming_packet_.data(), incoming_packet_.size(), remote_endpoint_);
     }
 
 private:
-    void async_wait_for_next_incoming_packet()
+    void async_receive_next_incoming_packet(void *buf, size_t buf_size, udp::endpoint& remote_peer_ip_port)
     {
-        sock_.async_receive_from(asio::buffer(recv_buffer_), remote_endpoint_,
-                boost::bind(&udp_server::parse_incoming_packet_and_async_send_reply, this,
-                        asio::placeholders::error,
-                        asio::placeholders::bytes_transferred));
+        sock_.async_receive_from(asio::buffer(buf, buf_size), remote_peer_ip_port,
+                boost::bind(&udp_server::on_packet_received, this,
+                        (const char*)buf,
+                        asio::placeholders::bytes_transferred,
+                        remote_peer_ip_port,
+                        asio::placeholders::error));
     }
 
-    void parse_incoming_packet_and_async_send_reply(const asio::error_code& error,
-            std::size_t bytes_transferred)
+    void on_packet_received(
+            const char              *data,
+            std::size_t             bytes_transferred,
+            const udp::endpoint&    remote_peer_ip_port,
+            const asio::error_code& error)
     {
         if (error) {
             return;
         }
         fprintf(stdout, "Debug: %d bytes received:\n", (int)bytes_transferred);
-        fprintf(stdout, "Debug: recv_buffer_[0]='%c'\n", recv_buffer_[0]);
+        fprintf(stdout, "Debug: data[0]=0x%02X\n", data[0]);
 
+        const std::string& reply = make_daytime_string();
+        async_send_next_outgoing_packet(reply.c_str(), reply.length(), remote_peer_ip_port);
 
-        std::shared_ptr<std::string> p(new std::string(make_daytime_string()));
-
-        sock_.async_send_to(asio::buffer(*p), remote_endpoint_,
-                boost::bind(&udp_server::after_async_send_to, this, p,
-                        asio::placeholders::error,
-                        asio::placeholders::bytes_transferred));
-
-        async_wait_for_next_incoming_packet();
+        async_receive_next_incoming_packet(incoming_packet_.data(), incoming_packet_.size(), remote_endpoint_);
     }
 
-    void after_async_send_to(
-            std::shared_ptr<std::string> p,
-            const asio::error_code& error,
-            std::size_t bytes_transferred)
+    void async_send_next_outgoing_packet(const void *data, size_t dlen, const udp::endpoint& remote_peer_ip_port)
+    {
+        sock_.async_send_to(asio::buffer(data, dlen), remote_peer_ip_port,
+                boost::bind(&udp_server::on_transmission_finished, this,
+                        asio::placeholders::bytes_transferred,
+                        asio::placeholders::error));
+    }
+
+    void on_transmission_finished(std::size_t bytes_transferred, const asio::error_code& error)
     {
     }
 
     udp::socket& sock_;
     udp::endpoint remote_endpoint_;
-    static const unsigned RECV_BUFFER_SIZE = 1500;
-    std::array<char, RECV_BUFFER_SIZE> recv_buffer_;
+    static const unsigned MAX_INCOMING_PACKET_LENGTH = 8*1024; // UDP报文长度理论最大值 0xFFFF = 65535 Bytes < 64KiB
+    std::array<char, MAX_INCOMING_PACKET_LENGTH> incoming_packet_;
 };
 
 
