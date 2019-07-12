@@ -20,8 +20,8 @@ using std::fprintf;
 #include <asio/version.hpp>
 #if defined(ASIO_VERSION) && ASIO_VERSION <= 101008
 namespace asio {
-    class io_context : public asio::io_service {};
-};
+    typedef asio::io_service io_context;
+}
 #endif
 
 std::string make_daytime_string()
