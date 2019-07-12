@@ -40,7 +40,7 @@ std::string make_daytime_string()
 
 class udp_server {
 public:
-    udp_server(udp::socket *sock) : sock_(sock)
+    udp_server(udp::socket& sock) : sock_(sock)
     {
         async_wait_for_next_incoming_packet();
     }
@@ -48,7 +48,7 @@ public:
 private:
     void async_wait_for_next_incoming_packet()
     {
-        sock_->async_receive_from(asio::buffer(recv_buffer_), remote_endpoint_,
+        sock_.async_receive_from(asio::buffer(recv_buffer_), remote_endpoint_,
                 boost::bind(&udp_server::parse_incoming_packet_and_async_send_reply, this,
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
@@ -66,7 +66,7 @@ private:
 
         std::shared_ptr<std::string> p(new std::string(make_daytime_string()));
 
-        sock_->async_send_to(asio::buffer(*p), remote_endpoint_,
+        sock_.async_send_to(asio::buffer(*p), remote_endpoint_,
                 boost::bind(&udp_server::after_async_send_to, this, p,
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
@@ -81,7 +81,7 @@ private:
     {
     }
 
-    udp::socket *sock_;
+    udp::socket& sock_;
     udp::endpoint remote_endpoint_;
     static const unsigned RECV_BUFFER_SIZE = 1500;
     std::array<char, RECV_BUFFER_SIZE> recv_buffer_;
@@ -109,7 +109,7 @@ int main(void)
             continue;
         }
         fprintf(stdout, "Listening on UDP service port %d...\n", port);
-        udp_server server(&sock);
+        udp_server server(sock);
         io_context.run();
         /* Normal exit: */
         return 0;
