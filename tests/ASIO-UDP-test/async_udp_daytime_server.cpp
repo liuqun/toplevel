@@ -14,10 +14,10 @@
 
 #include <ctime>
 #include <cstdio>
+#include <array> // using std::array;
+#include <memory> // using std::shared_ptr;
 #include <string>
-#include <boost/array.hpp>
 #include <boost/bind.hpp>
-#include <boost/shared_ptr.hpp>
 #include <asio.hpp>
 
 using asio::ip::udp;
@@ -62,10 +62,12 @@ private:
         }
         fprintf(stdout, "Debug: %d bytes received:\n", (int)bytes_transferred);
         fprintf(stdout, "Debug: recv_buffer_[0]='%c'\n", recv_buffer_[0]);
-        boost::shared_ptr<std::string> data(new std::string(make_daytime_string()));
 
-        sock_->async_send_to(asio::buffer(*data), remote_endpoint_,
-                boost::bind(&udp_server::after_async_send_to, this, data,
+
+        std::shared_ptr<std::string> p(new std::string(make_daytime_string()));
+
+        sock_->async_send_to(asio::buffer(*p), remote_endpoint_,
+                boost::bind(&udp_server::after_async_send_to, this, p,
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
 
@@ -73,7 +75,7 @@ private:
     }
 
     void after_async_send_to(
-            boost::shared_ptr<std::string> data,
+            std::shared_ptr<std::string> p,
             const asio::error_code& error,
             std::size_t bytes_transferred)
     {
@@ -82,7 +84,7 @@ private:
     udp::socket *sock_;
     udp::endpoint remote_endpoint_;
     static const unsigned RECV_BUFFER_SIZE = 1500;
-    boost::array<char, RECV_BUFFER_SIZE> recv_buffer_;
+    std::array<char, RECV_BUFFER_SIZE> recv_buffer_;
 };
 
 
