@@ -42,19 +42,19 @@ class udp_server {
 public:
     udp_server(udp::socket *sock) : sock_(sock)
     {
-        prepare_for_next_incomming_data();
+        async_wait_for_next_incoming_packet();
     }
 
 private:
-    void prepare_for_next_incomming_data()
+    void async_wait_for_next_incoming_packet()
     {
         sock_->async_receive_from(asio::buffer(recv_buffer_), remote_endpoint_,
-                boost::bind(&udp_server::after_receive_from, this,
+                boost::bind(&udp_server::parse_incoming_packet_and_async_send_reply, this,
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
     }
 
-    void after_receive_from(const asio::error_code& error,
+    void parse_incoming_packet_and_async_send_reply(const asio::error_code& error,
             std::size_t bytes_transferred)
     {
         if (error) {
@@ -69,7 +69,7 @@ private:
                         asio::placeholders::error,
                         asio::placeholders::bytes_transferred));
 
-        prepare_for_next_incomming_data();
+        async_wait_for_next_incoming_packet();
     }
 
     void after_async_send_to(
@@ -93,23 +93,24 @@ int main(void)
 {
     int port;
     int retry;
+    asio::io_context io_context;
+    udp::socket sock(io_context, udp::v4());
 
     port = DEFAULT_DAYTIME_SERVICE_PORT;
     for (retry=2; retry>0; retry-=1) {
         fprintf(stdout, "Preparing to run daytime server on UDP service port %d... \n", port);
         try {
-            asio::io_context io_context;
-            udp::socket sock(io_context, udp::endpoint(udp::v4(), port));
-            fprintf(stdout, "Listening on UDP service port %d...\n", port);
-            udp_server server(&sock);
-            io_context.run();
-            /* Normal exit: */
-            return 0;
-        }
-        catch (std::system_error& e) {
+            sock.bind(udp::endpoint(udp::v4(), port));
+        } catch (std::system_error& e) {
             fprintf(stderr, "Warning: Failed to start server on UDP port %d: %s\n", port, e.what());
             port += 8000;
+            continue;
         }
+        fprintf(stdout, "Listening on UDP service port %d...\n", port);
+        udp_server server(&sock);
+        io_context.run();
+        /* Normal exit: */
+        return 0;
     }
     /* Error exit: */
     if (retry<=0) {
