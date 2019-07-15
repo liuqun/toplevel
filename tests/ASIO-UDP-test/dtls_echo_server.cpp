@@ -37,7 +37,7 @@ extern "C" {
         // deque_t rxqueue;
         // int txfd;
         int peekmode;
-        udp::socket *udpsock_ptr;
+        udp::socket *server_udp_sock_ptr;
         udp::endpoint client_ip_and_port;
     } custom_bio_data_t;
 
@@ -53,12 +53,12 @@ extern "C" {
 /* 客户端访问会话记录 */
 class PeerRecord {
 public:
-    PeerRecord(udp::socket *udpsock_ptr)
+    PeerRecord(udp::socket *server_udp_sock_ptr)
     {
         m_ssl = nullptr;
         m_incoming_bio = m_outgoing_bio = nullptr;
         m_biodata.peekmode = 0;
-        m_biodata.udpsock_ptr = udpsock_ptr;
+        m_biodata.server_udp_sock_ptr = server_udp_sock_ptr;
     }
 
 public:
@@ -119,7 +119,7 @@ extern "C" {
 int main()
 {
     asio::io_context io_context;
-    udp::socket socket(io_context, IPV4_ONLY);
+    udp::socket server_udp_sock(io_context, IPV4_ONLY);
     udp::endpoint server_ip_and_port(IPV4_ONLY, DEFAULT_PORT);
     udp::endpoint client_ip_and_port;
     asio::error_code err_code_bind;
@@ -129,7 +129,7 @@ int main()
        将所有客户端的信息按 IP 地址和 UDP 端口号排列起来 */
     std::unordered_map<udp::endpoint, PeerRecord, MyHashAlgorithm> connected_peers;
 
-    socket.bind(server_ip_and_port, err_code_bind);
+    server_udp_sock.bind(server_ip_and_port, err_code_bind);
     if (err_code_bind) {
         const char *ip = server_ip_and_port.address().to_string().c_str();
         const int port = server_ip_and_port.port();
@@ -146,17 +146,17 @@ int main()
         return 0;
     }
 
-    PeerRecord record(&socket);
+    PeerRecord record(&server_udp_sock);
     record.m_ssl = nullptr;
     record.m_incoming_bio = nullptr;
     record.m_outgoing_bio = nullptr;
     record.m_biodata.peekmode = 0;
-    //record.m_biodata.udpsock_ptr = &socket;
+    //record.m_biodata.server_udp_sock_ptr = &server_udp_sock;
     for (;;) {
         fprintf(stderr, "DEBUG: Now we have %d DTLS clients to talk with.\n", (int)connected_peers.size());
 
         const void *incoming_data = recvbuf.data();
-        int n = socket.receive_from(asio::buffer(recvbuf), client_ip_and_port);
+        int n = server_udp_sock.receive_from(asio::buffer(recvbuf), client_ip_and_port);
         fprintf(stdout, "DEBUG: server received %d bytes, recvbuf[0] = 0x%02X\n", n, recvbuf[0]);
         if (n > 1456) {
             fprintf(stdout, "Warning: n=%d, 数据段长度n>1456 对应的IP包总长可能>1500(此包可能源自若干IP分片组合而成)\n", n);
@@ -194,8 +194,7 @@ int main()
             record.m_incoming_bio = incoming_bio;
             record.m_outgoing_bio = outgoing_bio;
             record.m_biodata.peekmode = 0;
-            record.m_biodata.udpsock_ptr = &socket;
-            //record.m_biodata.udpsock_ptr = &socket;
+            record.m_biodata.server_udp_sock_ptr = &server_udp_sock;
 
             /* 以客户端IP地址端口号为key, 插入一条新的 PeerRecord 访问记录到connected_peers, 记录来自此 UDP 端口的客户端 */
             auto pair = connected_peers.insert(std::pair<udp::endpoint, PeerRecord> {client_ip_and_port, record});
@@ -206,7 +205,7 @@ int main()
             record.m_incoming_bio = nullptr;
             record.m_outgoing_bio = nullptr;
             record.m_biodata.peekmode = 0;
-            record.m_biodata.udpsock_ptr = &socket;
+            record.m_biodata.server_udp_sock_ptr = &server_udp_sock;
         }
 
         BIO_write(p->m_incoming_bio, incoming_data, n);
@@ -459,18 +458,21 @@ int BIO_s_custom_write(BIO *b, const char *data, int dlen)
     //
     // dump_addr((struct sockaddr *)&cdp->txaddr, ">> ");
     // BIO_dump_hex((unsigned const char *)data, dlen, "    ");
-    udp::endpoint &client_ip_and_port = cdp->client_ip_and_port;
-    udp::socket &udpsock = *(cdp->udpsock_ptr);
     std::error_code err_code_send;
 
     fprintf(stderr, "DEBUG: LINE=%d: BIO_s_custom_write(b, data, dlen=%d)\n", __LINE__, dlen);
 
-const char *ip = client_ip_and_port.address().to_string().c_str();
-const int port = client_ip_and_port.port();
-fprintf(stderr, "DEBUG--!!!!!!! 准备发包给 client IP=%s, port=%d\n", ip, port);
+    {
+        /* 打印调试信息 */
+        const char *ip = cdp->client_ip_and_port.address().to_string().c_str();
+        const int port = cdp->client_ip_and_port.port();
+        fprintf(stderr, "DEBUG--!!!!!!! 准备发包给 client IP=%s, port=%d\n", ip, port);
+    }
 
-    udpsock.send_to(asio::buffer("a", 1), client_ip_and_port, 0, err_code_send);
-    //udpsock.send_to(asio::buffer(data, dlen), client_ip_and_port, 0, err_code_send); //sendto(cdp->txfd, data, dlen, 0, (struct sockaddr *)&cdp->txaddr, cdp->txaddr_buf.len);
+    udp::socket *sock_ptr = nullptr;
+    sock_ptr = cdp->server_udp_sock_ptr;
+    sock_ptr->send_to(asio::buffer("a", 1), cdp->client_ip_and_port, 0, err_code_send); //sendto(cdp->txfd, data, dlen, 0, (struct sockaddr *)&cdp->txaddr, cdp->txaddr_buf.len);
+    // udp_sock->send_to(asio::buffer(data, dlen), client_ip_and_port, 0, err_code_send);
     // if (ret >= 0)
     //     fprintf(stderr, "  %d bytes sent\n", ret);
     // else
