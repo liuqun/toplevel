@@ -20,3 +20,11 @@ target_include_directories(server PRIVATE
 target_link_libraries(server PRIVATE
   ${OPENSSL_LIBRARIES}
 )
+
+set(MY_CERT_DIR ${CMAKE_SOURCE_DIR}/certs)
+add_custom_target(keys_certs_gen ALL
+  WORKING_DIRECTORY ${MY_CERT_DIR}
+  COMMENT "Generate and copy pem files to the output directory..."
+  COMMAND make && cp root-ca.pem server-cert.pem server-key.pem ${CMAKE_BINARY_DIR}
+  VERBATIM
+)

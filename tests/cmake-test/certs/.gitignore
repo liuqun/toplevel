@@ -1,0 +1,5 @@
+# PEM keys/certs file
+*.pem
+
+# CA serial number file
+*.srl
