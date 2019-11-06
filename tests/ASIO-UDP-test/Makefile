@@ -7,7 +7,9 @@ CC = gcc
 CXX = g++
 CFLAGS = -g -O0 -pthread
 CXXFLAGS = $(CFLAGS) -std=c++11
+inc_dir = ./inc
 CPPFLAGS = -DNDEBUG
+CPPFLAGS += -I${inc_dir}/asio-1.10.8 -I${inc_dir}/boost-1.65.1
 LIBS = -lpthread -lgcc_s
 OPENSSL_CFLAGS += -I/opt/openssl/include
 OPENSSL_LIBS := -lssl -lcrypto -L/opt/openssl/lib
