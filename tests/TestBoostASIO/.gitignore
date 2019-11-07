@@ -54,3 +54,6 @@ compile_commands.json
 
 # QtCreator local machine specific files for imported projects
 *creator.user*
+
+# My project's output files
+main
