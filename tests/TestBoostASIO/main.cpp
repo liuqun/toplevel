@@ -137,7 +137,7 @@ std::string get_ipv4v6_addresses_from_all_network_adapters()
         if (AF_INET == ifa->ifa_addr->sa_family) {
             sin = reinterpret_cast<sockaddr_in *>(ifa->ifa_addr);
             void *sin_addr = &(sin->sin_addr);
-            if (!inet_ntop(AF_INET, sin_addr, strbuf4, sizeof(strbuf4))) {
+            if (!inet_ntop(AF_INET, sin_addr, strbuf4, INET_ADDRSTRLEN)) {
                 continue;
             }
             if (cnt >= 1) {
@@ -155,7 +155,7 @@ std::string get_ipv4v6_addresses_from_all_network_adapters()
         // IPv6
         sin6 = reinterpret_cast<sockaddr_in6 *>(ifa->ifa_addr);
         void *sin6_addr = &(sin6->sin6_addr);
-        if (!inet_ntop(AF_INET6, sin6_addr, strbuf6, sizeof(strbuf6))) {
+        if (!inet_ntop(AF_INET6, sin6_addr, strbuf6, INET6_ADDRSTRLEN)) {
             continue;
         }
         if (cnt >= 1) {
@@ -190,7 +190,7 @@ std::string get_ipv4_addresses_from_all_network_adapters()
         // IPv4
         sin = reinterpret_cast<sockaddr_in *>(ifa->ifa_addr);
         void *sin_addr = &(sin->sin_addr);
-        if (!inet_ntop(AF_INET, sin_addr, strbuf, sizeof(strbuf))) {
+        if (!inet_ntop(AF_INET, sin_addr, strbuf, INET_ADDRSTRLEN)) {
             continue;
         }
         if (cnt >= 1) {
